@@ -70,7 +70,7 @@
 # the compiler will take the hash and compile it into html
 # the compiler will be a recursive function
 
-require 'byebug'
+# require 'byebug'
 
 input = <<~EOF
   table
