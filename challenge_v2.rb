@@ -8,6 +8,10 @@ module Parser
       @value = value
       @indentation = indentation
     end
+
+    def to_s
+      "<#{@key} type=#{@type} value=#{@value} indentation=#{@indentation}>"
+    end
   end
 
   class Node
@@ -20,6 +24,10 @@ module Parser
       @children = children
       @indentation = indentation
     end
+
+    def to_s
+      "#{@key} #{@type} #{@value} #{@children} #{@indentation}"
+    end
   end
 
   class Parser
@@ -30,14 +38,29 @@ module Parser
     end
 
     def parse
+      base_indent = nil
       @input.each_line do |line|
         line = line.chomp
         next if line.empty?
         
-        token = tokenize(line)
-        @tokenized << token
+        line = normalize_indentation(line)
+        indentation = line[/\A */].size
+        key = line.split(" ").first
+        value = line.split(" ")[1..-1].join(" ")
+        if key == '|'
+          # handle multiline
+          # all next line will be type text untill its indentation is lower or its empty
+          base_indent = indentation
+          @tokenized << Token.new(nil, "text", value, indentation)
+        elsif (base_indent != nil && base_indent <= indentation)
+          # follow base indent and strip the indentation
+          value = line.lstrip
+          @tokenized << Token.new(nil, "text", value, base_indent)
+        else
+          @tokenized << Token.new(key, "tag", value, indentation)
+        end
       end
-
+      puts @tokenized.map { |token| token.to_s }
       @output = tree_builder(@tokenized)
 
       @output
@@ -53,8 +76,12 @@ module Parser
       indentation = line[/\A */].size
       key = line.split(" ").first
       value = line.split(" ")[1..-1].join(" ")
-      
-      Token.new(key, "tag", value, indentation)
+
+      if key == '|'
+        # handle multiline
+      else
+        Token.new(key, "tag", value, indentation)
+      end
     end
 
     # recursive function so it reach all elements
@@ -89,14 +116,15 @@ class Compiler
     node.each do |element|
       indents = " " * element.indentation
       html << "\n"
-      html << indents + "<#{element.key}>"
+      html << indents
+      html << "<#{element.key}>"  if element.type == "tag"
       html << element.value
       if element.children.any?
         html << indents + self.compile(element.children)
         html << "\n"
         html << indents + "</#{element.key}>"
       else
-        html << "</#{element.key}>"
+        html << "</#{element.key}>" if element.type == "tag"
       end
     end
     
@@ -108,8 +136,8 @@ text_input = File.read('./html.txt')
 puts text_input.inspect
 parser = Parser::Parser.new(text_input)
 parsed_text = parser.parse
-# puts parsed_text
 
+puts parsed_text
 
 compiled_text = Compiler.compile(parsed_text)
 puts compiled_text
