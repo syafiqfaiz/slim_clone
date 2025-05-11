@@ -1,0 +1,13 @@
+table
+  thead
+    tr
+      td Heading 1
+      td Heading 2
+  tbody
+    tr 
+      td Body 1
+      td Body 2
+
+div
+	p
+		this is supposed to be on tab
