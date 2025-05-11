@@ -1,18 +1,3 @@
-# maintain all features but refactoring to looks nicer
-# change from hash to object, cleaner syntax
-
-input = <<~EOF
-  table
-    thead
-      tr
-        td Heading 1
-        td Heading 2
-    tbody
-      tr 
-        td Body 1
-        td Body 2
-  EOF
-
 module Parser
   class Token
     attr_accessor :key, :type, :value, :indentation
@@ -59,7 +44,12 @@ module Parser
     end
 
     private
+    def normalize_indentation(line)
+      line.gsub("\t", ' ' * 2)
+    end
+
     def tokenize(line)
+      line = normalize_indentation(line)
       indentation = line[/\A */].size
       key = line.split(" ").first
       value = line.split(" ")[1..-1].join(" ")
@@ -114,7 +104,9 @@ class Compiler
   end
 end
 
-parser = Parser::Parser.new(input)
+text_input = File.read('./html.txt')
+puts text_input.inspect
+parser = Parser::Parser.new(text_input)
 parsed_text = parser.parse
 # puts parsed_text
 
