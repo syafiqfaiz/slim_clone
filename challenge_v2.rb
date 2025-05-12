@@ -26,7 +26,7 @@ module Parser
     end
 
     def to_s
-      "#{@key} #{@type} #{@value} #{@children} #{@indentation}"
+      "<#{@key} type=#{@type} value=#{@value} children=#{@children.map {|child| child.to_s}} indentation=#{@indentation}\n>"
     end
   end
 
@@ -38,29 +38,7 @@ module Parser
     end
 
     def parse
-      base_indent = nil
-      @input.each_line do |line|
-        line = line.chomp
-        next if line.empty?
-        
-        line = normalize_indentation(line)
-        indentation = line[/\A */].size
-        key = line.split(" ").first
-        value = line.split(" ")[1..-1].join(" ")
-        if key == '|'
-          # handle multiline
-          # all next line will be type text untill its indentation is lower or its empty
-          base_indent = indentation
-          @tokenized << Token.new(nil, "text", value, indentation)
-        elsif (base_indent != nil && base_indent <= indentation)
-          # follow base indent and strip the indentation
-          value = line.lstrip
-          @tokenized << Token.new(nil, "text", value, base_indent)
-        else
-          @tokenized << Token.new(key, "tag", value, indentation)
-        end
-      end
-      puts @tokenized.map { |token| token.to_s }
+      @tokenized = tokenize(@input)
       @output = tree_builder(@tokenized)
 
       @output
@@ -71,17 +49,33 @@ module Parser
       line.gsub("\t", ' ' * 2)
     end
 
-    def tokenize(line)
-      line = normalize_indentation(line)
-      indentation = line[/\A */].size
-      key = line.split(" ").first
-      value = line.split(" ")[1..-1].join(" ")
+    def tokenize(input)
+      tokenized = []
+      base_indent = nil
+      input.each_line do |line|
+        line = line.chomp
+        next if line.empty?
+        
+        line = normalize_indentation(line)
+        indentation = line[/\A */].size
+        key = line.split(" ").first
+        value = line.split(" ")[1..-1].join(" ")
 
-      if key == '|'
-        # handle multiline
-      else
-        Token.new(key, "tag", value, indentation)
+        if key == '|'
+          # handle multiline
+          # all next line will be type text untill its indentation is lower or its empty
+          base_indent = indentation
+          tokenized << Token.new(nil, "text", value, indentation)
+        elsif (base_indent != nil && base_indent <= indentation)
+          # follow base indent and strip the indentation
+          value = line.lstrip
+          tokenized << Token.new(nil, "text", value, base_indent)
+        else
+          tokenized << Token.new(key, "tag", value, indentation)
+        end
       end
+
+      tokenized
     end
 
     # recursive function so it reach all elements
@@ -96,7 +90,6 @@ module Parser
         elsif token.indentation > parent_indent
           # child of the last node
           last = nodes.last
-          
           last.children += tree_builder(tokens, token.indentation)
         else
           # same level
@@ -117,8 +110,9 @@ class Compiler
       indents = " " * element.indentation
       html << "\n"
       html << indents
-      html << "<#{element.key}>"  if element.type == "tag"
+      html << "<#{element.key}>" if element.type == "tag"
       html << element.value
+
       if element.children.any?
         html << indents + self.compile(element.children)
         html << "\n"
