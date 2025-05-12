@@ -8,6 +8,10 @@ module Parser
       @value = value
       @indentation = indentation
     end
+
+    def to_s
+      "<#{@key} type=#{@type} value=#{@value} indentation=#{@indentation}>"
+    end
   end
 
   class Node
@@ -20,6 +24,10 @@ module Parser
       @children = children
       @indentation = indentation
     end
+
+    def to_s
+      "<#{@key} type=#{@type} value=#{@value} children=#{@children.map {|child| child.to_s}} indentation=#{@indentation}\n>"
+    end
   end
 
   class Parser
@@ -30,14 +38,7 @@ module Parser
     end
 
     def parse
-      @input.each_line do |line|
-        line = line.chomp
-        next if line.empty?
-        
-        token = tokenize(line)
-        @tokenized << token
-      end
-
+      @tokenized = tokenize(@input)
       @output = tree_builder(@tokenized)
 
       @output
@@ -48,13 +49,33 @@ module Parser
       line.gsub("\t", ' ' * 2)
     end
 
-    def tokenize(line)
-      line = normalize_indentation(line)
-      indentation = line[/\A */].size
-      key = line.split(" ").first
-      value = line.split(" ")[1..-1].join(" ")
-      
-      Token.new(key, "tag", value, indentation)
+    def tokenize(input)
+      tokenized = []
+      base_indent = nil
+      input.each_line do |line|
+        line = line.chomp
+        next if line.empty?
+        
+        line = normalize_indentation(line)
+        indentation = line[/\A */].size
+        key = line.split(" ").first
+        value = line.split(" ")[1..-1].join(" ")
+
+        if key == '|'
+          # handle multiline
+          # all next line will be type text untill its indentation is lower or its empty
+          base_indent = indentation
+          tokenized << Token.new(nil, "text", value, indentation)
+        elsif (base_indent != nil && base_indent <= indentation)
+          # follow base indent and strip the indentation
+          value = line.lstrip
+          tokenized << Token.new(nil, "text", value, base_indent)
+        else
+          tokenized << Token.new(key, "tag", value, indentation)
+        end
+      end
+
+      tokenized
     end
 
     # recursive function so it reach all elements
@@ -69,7 +90,6 @@ module Parser
         elsif token.indentation > parent_indent
           # child of the last node
           last = nodes.last
-          
           last.children += tree_builder(tokens, token.indentation)
         else
           # same level
@@ -89,14 +109,16 @@ class Compiler
     node.each do |element|
       indents = " " * element.indentation
       html << "\n"
-      html << indents + "<#{element.key}>"
+      html << indents
+      html << "<#{element.key}>" if element.type == "tag"
       html << element.value
+
       if element.children.any?
         html << indents + self.compile(element.children)
         html << "\n"
         html << indents + "</#{element.key}>"
       else
-        html << "</#{element.key}>"
+        html << "</#{element.key}>" if element.type == "tag"
       end
     end
     
@@ -108,8 +130,8 @@ text_input = File.read('./html.txt')
 puts text_input.inspect
 parser = Parser::Parser.new(text_input)
 parsed_text = parser.parse
-# puts parsed_text
 
+puts parsed_text
 
 compiled_text = Compiler.compile(parsed_text)
 puts compiled_text
